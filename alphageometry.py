@@ -546,12 +546,17 @@ def run_alphageometry(
 
     for prev_score, (g, string, pstring) in beam_queue:
       logging.info('Decoding from %s', string)
-      outputs = model.beam_decode(string, eos_tokens=[';'])
+
+      refs = [tok for tok in string.split() if tok.isdigit()]  # ref tokens.
+      stop_tok = f'{int(refs[-1]) + 2:02}'  # stop only after exactly two predicates to get one aux point.
+      mask_toks = [';', '.']  # do not stop this aux sentence mid way.
+
+      outputs = model.beam_decode(string, eos_tokens=[stop_tok], mask_tokens=mask_toks)
 
       # translate lm output to the constructive language.
       # so that we can update the graph representing proof states:
       translations = [
-          try_translate_constrained_to_construct(o, g)
+          try_translate_constrained_to_construct(o + ' ;', g)
           for o in outputs['seqs_str']
       ]
 
@@ -585,7 +590,7 @@ def run_alphageometry(
         new_queue.add(
             # The string for the new node is old_string + lm output +
             # the special token asking for a new auxiliary point ' x00':
-            node=(g_new, string + ' ' + lm_out + ' x00', candidate_pstring),
+            node=(g_new, string + ' ' + lm_out + ' ; x00', candidate_pstring),
             # the score of each node is sum of score of all nodes
             # on the path to itself. For beam search, there is no need to
             # normalize according to path length because all nodes in beam
